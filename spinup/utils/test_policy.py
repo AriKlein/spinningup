@@ -8,6 +8,64 @@ from spinup import EpochLogger
 from spinup.utils.logx import restore_tf_graph
 
 
+def taxi_decode(i):
+    dest_idx = 3
+    pass_loc = 4
+    #pass_loc = 4*(i%2)
+    #i = i//2
+    col_idx = i%5
+    i = i//5
+    row_idx = i%5
+    return [row_idx, col_idx, 4, 3] # pass_loc,dest_idx]
+
+#ARI:  decode to make the passenger and destination location have the same units
+def taxi_decode_v2(i):
+    (taxi_row, taxi_col, pass_loc, dest_idx) = list(taxi_decode(i))
+    locs = [(0, 0), (0, 4), (4, 0), (4, 3)]
+    dest_row = locs[dest_idx][0]
+    dest_col = locs[dest_idx][1]
+    pass_in_taxi = 0
+    if pass_loc==4:
+        pass_row = taxi_row
+        pass_col = taxi_col
+        pass_in_taxi = 1
+    else:
+        pass_row = locs[pass_loc][0]
+        pass_col = locs[pass_loc][1]
+        pass_in_taxi = 0
+    return list(taxi_decode(i)) # (taxi_row, taxi_col, dest_row, dest_col)  #  (taxi_row, taxi_col, pass_row, pass_col, dest_row, dest_col, pass_in_taxi)
+
+
+
+'''
+def taxi_decode(i):
+    dest_idx = 3
+    pass_loc = 4
+    #pass_loc = 4*(i%2)
+    #i = i//2
+    col_idx = i%5
+    i = i//5
+    row_idx = i%5
+    return [row_idx, col_idx, pass_loc,dest_idx]
+
+#ARI:  decode to make the passenger and destination location have the same units
+def taxi_decode_v2(i):
+    (taxi_row, taxi_col, pass_loc, dest_idx) = list(taxi_decode(i))
+    locs = [(0, 0), (0, 4), (4, 0), (4, 3)]
+    dest_row = locs[dest_idx][0]
+    dest_col = locs[dest_idx][1]
+    pass_in_taxi = 0
+    if pass_loc==4:
+        pass_row = taxi_row
+        pass_col = taxi_col
+        pass_in_taxi = 1
+    else:
+        pass_row = locs[pass_loc][0]
+        pass_col = locs[pass_loc][1]
+        pass_in_taxi = 0
+    return (taxi_row, taxi_col, dest_row, dest_col)  #  (taxi_row, taxi_col, pass_row, pass_col, dest_row, dest_col, pass_in_taxi)
+'''
+
 def load_policy_and_env(fpath, itr='last', deterministic=False):
     """
     Load a policy from save, whether it's TF or PyTorch, along with RL env.
@@ -121,8 +179,10 @@ def run_policy(env, get_action, max_ep_len=None, num_episodes=100, render=True):
             env.render()
             time.sleep(1e-3)
 
+        o = list(taxi_decode_v2(o)) # ARI:  hack to make this work for taxi problem
         a = get_action(o)
-        o, r, d, _ = env.step(a)
+        taxi_action = int(a)
+        o, r, d, _ = env.step(taxi_action) # env.step(a)
         ep_ret += r
         ep_len += 1
 

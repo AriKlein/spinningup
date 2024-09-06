@@ -68,23 +68,27 @@ class TaxiEnv(discrete.DiscreteEnv):
     metadata = {'render.modes': ['human', 'ansi']}
 
     def __init__(self):
+        print("ARI:  running taxi env")
+
         self.desc = np.asarray(MAP, dtype='c')
 
         self.locs = locs = [(0,0), (0,4), (4,0), (4,3)]
 
-        num_states = 500
+        num_states = 25 # 50 # 500
         num_rows = 5
         num_columns = 5
         max_row = num_rows - 1
         max_col = num_columns - 1
         initial_state_distrib = np.zeros(num_states)
-        num_actions = 6
+        num_actions = 5 #6
         P = {state: {action: []
                      for action in range(num_actions)} for state in range(num_states)}
+        hacked_pass_idx = [len(locs)]#  # hack passenger to be in taxi. [0, len(locs)] # hack passenger to either be in 'R' or in taxi.
+        hacked_dest_idx = [len(locs)-1] # hard-code destination to B
         for row in range(num_rows):
             for col in range(num_columns):
-                for pass_idx in range(len(locs) + 1):  # +1 for being inside taxi
-                    for dest_idx in range(len(locs)):
+                for pass_idx in hacked_pass_idx: # range(len(locs) + 1):  # +1 for being inside taxi
+                    for dest_idx in hacked_dest_idx: #  range(len(locs)):
                         state = self.encode(row, col, pass_idx, dest_idx)
                         if pass_idx < 4 and pass_idx != dest_idx:
                             initial_state_distrib[state] += 1
@@ -104,19 +108,25 @@ class TaxiEnv(discrete.DiscreteEnv):
                             elif action == 3 and self.desc[1 + row, 2 * col] == b":":
                                 new_col = max(col - 1, 0)
                             elif action == 4:  # pickup
+                                '''
                                 if (pass_idx < 4 and taxi_loc == locs[pass_idx]):
                                     new_pass_idx = 4
+                                    # reward = 50
                                 else: # passenger not at location
-                                    reward = -10
+                                    reward = -5
                             elif action == 5:  # dropoff
+                                '''
                                 if (taxi_loc == locs[dest_idx]) and pass_idx == 4:
                                     new_pass_idx = dest_idx
                                     done = True
-                                    reward = 20
+                                    reward = 500
                                 elif (taxi_loc in locs) and pass_idx == 4:
-                                    new_pass_idx = locs.index(taxi_loc)
+                                    # new_pass_idx = locs.index(taxi_loc)
+                                    reward = -10
+                                    done = False
                                 else: # dropoff at wrong location
                                     reward = -10
+                                    done = False
                             new_state = self.encode(
                                 new_row, new_col, new_pass_idx, dest_idx)
                             P[state][action].append(
@@ -125,6 +135,26 @@ class TaxiEnv(discrete.DiscreteEnv):
         discrete.DiscreteEnv.__init__(
             self, num_states, num_actions, P, initial_state_distrib)
 
+    def encode(self, taxi_row, taxi_col, pass_loc, dest_idx):
+        # (5) 5, 5, 4
+        i = taxi_row
+        i *= 5
+        i += taxi_col
+        #i*=2
+        #i+=(pass_loc==4)
+        return i
+
+    def decode(self, i):
+        dest_idx = 3
+        pass_loc = 4
+        #pass_loc = 4*(i%2)
+        #i = i//2
+        col_idx = i%5
+        i = i//5
+        row_idx = i%5
+        return [row_idx, col_idx, pass_loc,dest_idx]
+
+    '''
     def encode(self, taxi_row, taxi_col, pass_loc, dest_idx):
         # (5) 5, 5, 4
         i = taxi_row
@@ -147,6 +177,7 @@ class TaxiEnv(discrete.DiscreteEnv):
         out.append(i)
         assert 0 <= i < 5
         return reversed(out)
+    '''
 
     def render(self, mode='human'):
         outfile = StringIO() if mode == 'ansi' else sys.stdout
@@ -169,7 +200,7 @@ class TaxiEnv(discrete.DiscreteEnv):
         out[1 + di][2 * dj + 1] = utils.colorize(out[1 + di][2 * dj + 1], 'magenta')
         outfile.write("\n".join(["".join(row) for row in out]) + "\n")
         if self.lastaction is not None:
-            outfile.write("  ({})\n".format(["South", "North", "East", "West", "Pickup", "Dropoff"][self.lastaction]))
+            outfile.write("  ({})\n".format(["South", "North", "East", "West", "Dropoff"][self.lastaction])) # outfile.write("  ({})\n".format(["South", "North", "East", "West", "Pickup", "Dropoff"][self.lastaction]))
         else: outfile.write("\n")
 
         # No need to return anything for human

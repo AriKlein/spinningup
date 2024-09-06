@@ -8,6 +8,60 @@ from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 
+#from gym.wrappers import FlattenDictWrapper
+
+'''
+# ARI: copy of original taxi decode
+def taxi_decode(i):
+    out = []
+    out.append(i % 4)
+    i = i // 4
+    out.append(i % 5)
+    i = i // 5
+    out.append(i % 5)
+    i = i // 5
+    out.append(i)
+    assert 0 <= i < 5
+    return reversed(out)
+'''
+
+'''
+def taxi_decode(i):
+    dest_idx = 3
+    pass_loc = 4 * (i % 2)
+    i = i // 2
+    col_idx = i % 5
+    i = i // 5
+    row_idx = i % 5
+    return [row_idx, col_idx, pass_loc, dest_idx]
+'''
+
+def taxi_decode(i):
+    dest_idx = 3
+    pass_loc = 4
+    #pass_loc = 4*(i%2)
+    #i = i//2
+    col_idx = i%5
+    i = i//5
+    row_idx = i%5
+    return [row_idx, col_idx, 4, 3] # pass_loc,dest_idx]
+
+#ARI:  decode to make the passenger and destination location have the same units
+def taxi_decode_v2(i):
+    (taxi_row, taxi_col, pass_loc, dest_idx) = list(taxi_decode(i))
+    locs = [(0, 0), (0, 4), (4, 0), (4, 3)]
+    dest_row = locs[dest_idx][0]
+    dest_col = locs[dest_idx][1]
+    pass_in_taxi = 0
+    if pass_loc==4:
+        pass_row = taxi_row
+        pass_col = taxi_col
+        pass_in_taxi = 1
+    else:
+        pass_row = locs[pass_loc][0]
+        pass_col = locs[pass_loc][1]
+        pass_in_taxi = 0
+    return list(taxi_decode(i)) # (taxi_row, taxi_col, dest_row, dest_col)  #  (taxi_row, taxi_col, pass_row, pass_col, dest_row, dest_col, pass_in_taxi)
 
 class PPOBuffer:
     """
@@ -206,7 +260,13 @@ def ppo(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     # Instantiate environment
     env = env_fn()
-    obs_dim = env.observation_space.shape
+
+    # ARI:  added code to support taxi
+    #print(env.decode(194))
+
+
+    # env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+    obs_dim = (4,) # (7,) # env.observation_space.shape
     act_dim = env.action_space.shape
 
     # Create actor-critic module
@@ -294,12 +354,20 @@ def ppo(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     start_time = time.time()
     o, ep_ret, ep_len = env.reset(), 0, 0
 
+
+
     # Main loop: collect experience in env and update/log each epoch
     for epoch in range(epochs):
         for t in range(local_steps_per_epoch):
+            # o = taxi_decode(o)
+            o = list(taxi_decode_v2(o)) # ARI:  hack to make this work for taxi problem
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
 
-            next_o, r, d, _ = env.step(a)
+            # ARI:  a is action_probs, but Taxi expects deterministic action, so need to sample
+            # print(a)
+            taxi_action = int(a) # .numpy() # .sample()
+
+            next_o, r, d, _ =  env.step(taxi_action) # env.step(a)
             ep_ret += r
             ep_len += 1
 
@@ -319,6 +387,7 @@ def ppo(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                     print('Warning: trajectory cut off by epoch at %d steps.'%ep_len, flush=True)
                 # if trajectory didn't reach terminal state, bootstrap value target
                 if timeout or epoch_ended:
+                    o = list(taxi_decode_v2(o))  # ARI:  hack to make this work for taxi problem
                     _, v, _ = ac.step(torch.as_tensor(o, dtype=torch.float32))
                 else:
                     v = 0

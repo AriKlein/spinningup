@@ -112,7 +112,7 @@ class MLPActorCritic(nn.Module):
                  hidden_sizes=(64,64), activation=nn.Tanh):
         super().__init__()
 
-        obs_dim = observation_space.shape[0]
+        obs_dim = 4 # 7 # observation_space.shape[0]
 
         # policy builder depends on action space
         if isinstance(action_space, Box):
