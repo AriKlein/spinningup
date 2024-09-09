@@ -6,7 +6,8 @@ import tensorflow as tf
 import torch
 from spinup import EpochLogger
 from spinup.utils.logx import restore_tf_graph
-
+import pandas as pd
+import numpy as np
 
 def taxi_decode(i):
     dest_idx = 3
@@ -197,7 +198,157 @@ def run_policy(env, get_action, max_ep_len=None, num_episodes=100, render=True):
     logger.dump_tabular()
 
 
+
+# Method to pretty-print the policies:
+# - Prints a policy map for each passenger location given that the passenger is not yet in the taxi, so the taxi should be trying to get to and pick up the passenger
+# - Prints a policy map for each destination location given that the passenger is already in the taxi, so the taxi should be trying to get to the destination and drop off the passenger
+def pretty_print_policy(taxi, local_policy):
+
+    MAP = [
+        "+---------+",
+        "|R: | : :G|",
+        "| : | : : |",
+        "| : : : : |",
+        "| | : | : |",
+        "|Y| : |B: |",
+        "+---------+",
+    ]
+
+    direction_repr = {1:' 🡑 ', 2:' 🡒 ', 3:' 🡐 ', 0:' 🡓 ', 4:' + ', 5:' - ', None:' ⬤ '}
+
+    # Print policies for states where we are trying to get to passenger, so dest_idx is irrelevant, as long as not = pass_idx
+    '''
+    print('Passenger not in taxi, pass at Red (top left):')
+    for row in range(5):
+        for col in range(5):
+            state = taxi.encode(row, col, 0, 1)
+            print(taxi.MAP[row+1][2*col],end='')
+            print(direction_repr[local_policy[state]],end='')
+        print()
+
+    print('Passenger not in taxi, pass at Green (Top Right):')
+    for row in range(5):
+        for col in range(5):
+            state = taxi.encode(row, col, 1, 0)
+            print(taxi.MAP[row+1][2*col],end='')
+            print(direction_repr[local_policy[state]],end='')
+        print()
+
+    print('Passenger not in taxi, pass at yellow (Bottom Left):')
+    for row in range(5):
+        for col in range(5):
+            state = taxi.encode(row, col, 2, 0)
+            print(taxi.MAP[row+1][2*col],end='')
+            print(direction_repr[local_policy[state]],end='')
+        print()
+
+    print('Passenger not in taxi, pass at Blue (Bottom Right):')
+    for row in range(5):
+        for col in range(5):
+            state = taxi.encode(row, col, 3, 0)
+            print(taxi.MAP[row+1][2*col],end='')
+            print(direction_repr[local_policy[state]],end='')
+        print()
+
+
+
+    # Print policies for states where we already have passenger and are trying to get to destination, so pass_idx is always 4
+
+    print('Passenger in taxi, Dest = Red (Top Left):')
+    for row in range(5):
+        for col in range(5):
+            state = taxi.encode(row, col, 4, 0)
+            print(taxi.MAP[row+1][2*col],end='')
+            print(direction_repr[local_policy[state]],end='')
+        print()
+
+    print('Passenger in taxi, Dest = Green (Top Right):')
+    for row in range(5):
+        for col in range(5):
+            state = taxi.encode(row, col, 4, 1)
+            print(taxi.MAP[row+1][2*col],end='')
+            print(direction_repr[local_policy[state]],end='')
+        print()
+
+    print('Passenger in taxi, Dest = Yellow (Bottom Left):')
+    for row in range(5):
+        for col in range(5):
+            state = taxi.encode(row, col, 4, 2)
+            print(taxi.MAP[row+1][2*col],end='')
+            print(direction_repr[local_policy[state]],end='')
+        print()
+    '''
+
+    print('Passenger in taxi, Dest = Blue (Bottom Right):')
+    for row in range(5):
+        for col in range(5):
+            state = taxi.encode(row, col, 4, 3)
+            print(MAP[row+1][2*col],end='')
+            print(direction_repr[local_policy[state]],end='')
+        print()
+
+def export_policy_to_excel(fpath, itr, deterministic=False):
+
+    fname = osp.join(fpath, 'pyt_save','model.pt') # 'model'+itr+'.pt')
+    print('\n\nLoading from %s.\n\n'%fname)
+
+    model = torch.load(fname)
+
+    possible_actions = ["South", "North", "East", "West", "Pickup/Dropoff"]
+
+    excel_df = {}
+    excel_df_keys_state = ['Taxi Row', 'Taxi Column', 'Destination Row', 'Destination Column']
+    excel_df_keys_actions = []
+    for ii in possible_actions:
+        excel_df_keys_actions.append(['pi('+ii+')'])
+    # excel_df_keys_actions.append = excel_df_keys + ['V']
+
+    my_policy = np.zeros(env.nS)
+
+    for ii in range(len(excel_df_keys_state)):
+        excel_df[excel_df_keys_state[ii]] = []
+
+    for ii in range(len(excel_df_keys_actions)):
+        excel_df[excel_df_keys_actions[ii][0]] = []
+
+    excel_df['Sum Probs'] = []
+    excel_df['V'] = []
+    excel_df['Highest Probability Action'] = []
+
+
+    for o in range(env.nS):
+        state_index = o
+        # Decode state and put into Excel DF
+        o = list(taxi_decode_v2(o))
+        for ii in range(len(o)):
+            excel_df[excel_df_keys_state[ii]].append(o[ii])
+
+        # Pass state to model
+        o = torch.as_tensor(o, dtype=torch.float32)
+        a, v, logp = model.step(o)
+        p = model.ari_get_distribution(o).probs # np.exp(logp)
+
+        for ii in range(len(p)):
+            excel_df[excel_df_keys_actions[ii][0]].append(float(p[ii]))
+
+        excel_df['Sum Probs'].append(float(sum(p)))
+        excel_df['V'].append(float(v))
+        excel_df['Highest Probability Action'].append(possible_actions[int(np.argmax(p))])
+
+        my_policy[state_index] = int(np.argmax(p))
+
+    df = pd.DataFrame(excel_df)
+
+    writer = pd.ExcelWriter('Simple_Taxi_Policy.xlsx', engine="xlsxwriter")
+    df.to_excel(writer, sheet_name='Simple_Taxi_Policy')
+    writer.close()
+
+    pretty_print_policy(env,my_policy)
+
+
 if __name__ == '__main__':
+
+    #'''
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('fpath', type=str)
@@ -207,7 +358,12 @@ if __name__ == '__main__':
     parser.add_argument('--itr', '-i', type=int, default=-1)
     parser.add_argument('--deterministic', '-d', action='store_true')
     args = parser.parse_args()
-    env, get_action = load_policy_and_env(args.fpath, 
-                                          args.itr if args.itr >=0 else 'last',
-                                          args.deterministic)
+    env, get_action = load_policy_and_env(args.fpath, args.itr if args.itr >=0 else 'last', args.deterministic)
     run_policy(env, get_action, args.len, args.episodes, not(args.norender))
+    export_policy_to_excel(args.fpath, args.itr if args.itr >=0 else 'last', args.deterministic)
+    #'''
+    '''
+    fpath = '/home/ari11/spinningup/ari_test/taxi_torch_basic_v1'
+    env, get_action = load_policy_and_env(fpath, 'last')
+    export_policy_to_excel(fpath, 'last')
+    '''

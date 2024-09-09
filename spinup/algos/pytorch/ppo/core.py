@@ -131,5 +131,11 @@ class MLPActorCritic(nn.Module):
             v = self.v(obs)
         return a.numpy(), v.numpy(), logp_a.numpy()
 
+
+    def ari_get_distribution(self, obs):
+        with torch.no_grad():
+            pi = self.pi._distribution(obs)
+        return pi
+
     def act(self, obs):
         return self.step(obs)[0]
