@@ -74,7 +74,7 @@ class TaxiEnv(discrete.DiscreteEnv):
 
         self.locs = locs = [(0,0), (0,4), (4,0), (4,3)]
 
-        num_states = 25 # 50 # 500
+        num_states = 25 # 25 # 50 # 500
         num_rows = 5
         num_columns = 5
         max_row = num_rows - 1
@@ -88,9 +88,9 @@ class TaxiEnv(discrete.DiscreteEnv):
         for row in range(num_rows):
             for col in range(num_columns):
                 for pass_idx in hacked_pass_idx: # range(len(locs) + 1):  # +1 for being inside taxi
-                    for dest_idx in hacked_dest_idx: #  range(len(locs)):
+                    for dest_idx in hacked_dest_idx: # range(len(locs)):
                         state = self.encode(row, col, pass_idx, dest_idx)
-                        if pass_idx < 4 and pass_idx != dest_idx:
+                        if pass_idx != dest_idx: #  pass_idx < 4 and pass_idx != dest_idx:
                             initial_state_distrib[state] += 1
                         for action in range(num_actions):
                             # defaults
@@ -135,16 +135,22 @@ class TaxiEnv(discrete.DiscreteEnv):
         discrete.DiscreteEnv.__init__(
             self, num_states, num_actions, P, initial_state_distrib)
 
+
+
     def encode(self, taxi_row, taxi_col, pass_loc, dest_idx):
         # (5) 5, 5, 4
         i = taxi_row
         i *= 5
         i += taxi_col
-        #i*=2
-        #i+=(pass_loc==4)
+        #i *= 4
+        #i += pass_loc
+        #i *= 4
+        #i += dest_idx
         return i
 
     def decode(self, i):
+        #dest_idx = i % 4
+        #i = i // 4
         dest_idx = 3
         pass_loc = 4
         #pass_loc = 4*(i%2)
@@ -153,6 +159,33 @@ class TaxiEnv(discrete.DiscreteEnv):
         i = i//5
         row_idx = i%5
         return [row_idx, col_idx, pass_loc,dest_idx]
+
+
+    '''
+    def encode(self, taxi_row, taxi_col, pass_loc, dest_idx):
+        # (5) 5, 5, 4
+        i = taxi_row
+        i *= 5
+        i += taxi_col
+        i *= 4
+        #i += pass_loc
+        #i *= 4
+        i += dest_idx
+        return i
+
+    def decode(self, i):
+        dest_idx = i % 4
+        i = i // 4
+        # dest_idx = 3
+        pass_loc = 4
+        #pass_loc = 4*(i%2)
+        #i = i//2
+        col_idx = i%5
+        i = i//5
+        row_idx = i%5
+        return [row_idx, col_idx, pass_loc,dest_idx]
+    '''
+
 
     '''
     def encode(self, taxi_row, taxi_col, pass_loc, dest_idx):

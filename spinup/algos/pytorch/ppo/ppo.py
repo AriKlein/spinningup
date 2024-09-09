@@ -36,6 +36,7 @@ def taxi_decode(i):
     return [row_idx, col_idx, pass_loc, dest_idx]
 '''
 
+'''
 def taxi_decode(i):
     dest_idx = 3
     pass_loc = 4
@@ -45,6 +46,21 @@ def taxi_decode(i):
     i = i//5
     row_idx = i%5
     return [row_idx, col_idx, 4, 3] # pass_loc,dest_idx]
+'''
+
+'''
+
+def taxi_decode(i):
+    dest_idx = i % 4
+    i = i // 4
+    # dest_idx = 3
+    pass_loc = 4
+    # pass_loc = 4*(i%2)
+    # i = i//2
+    col_idx = i % 5
+    i = i // 5
+    row_idx = i % 5
+    return [row_idx, col_idx, pass_loc, dest_idx]
 
 #ARI:  decode to make the passenger and destination location have the same units
 def taxi_decode_v2(i):
@@ -61,7 +77,8 @@ def taxi_decode_v2(i):
         pass_row = locs[pass_loc][0]
         pass_col = locs[pass_loc][1]
         pass_in_taxi = 0
-    return list(taxi_decode(i)) # (taxi_row, taxi_col, dest_row, dest_col)  #  (taxi_row, taxi_col, pass_row, pass_col, dest_row, dest_col, pass_in_taxi)
+    return (taxi_row, taxi_col, dest_row, dest_col)  #  (taxi_row, taxi_col, pass_row, pass_col, dest_row, dest_col, pass_in_taxi)
+'''
 
 class PPOBuffer:
     """
@@ -360,14 +377,14 @@ def ppo(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     for epoch in range(epochs):
         for t in range(local_steps_per_epoch):
             # o = taxi_decode(o)
-            o = list(taxi_decode_v2(o)) # ARI:  hack to make this work for taxi problem
+            o = list(env.decode(o)) # taxi_decode_v2(o)) # ARI:  hack to make this work for taxi problem
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
 
             # ARI:  a is action_probs, but Taxi expects deterministic action, so need to sample
             # print(a)
             taxi_action = int(a) # .numpy() # .sample()
 
-            next_o, r, d, _ =  env.step(taxi_action) # env.step(a)
+            next_o, r, d, _ = env.step(taxi_action) # env.step(a)
             ep_ret += r
             ep_len += 1
 
@@ -387,7 +404,7 @@ def ppo(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                     print('Warning: trajectory cut off by epoch at %d steps.'%ep_len, flush=True)
                 # if trajectory didn't reach terminal state, bootstrap value target
                 if timeout or epoch_ended:
-                    o = list(taxi_decode_v2(o))  # ARI:  hack to make this work for taxi problem
+                    o = list(env.decode(o))  # ARI:  hack to make this work for taxi problem
                     _, v, _ = ac.step(torch.as_tensor(o, dtype=torch.float32))
                 else:
                     v = 0

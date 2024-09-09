@@ -9,6 +9,38 @@ from spinup.utils.logx import restore_tf_graph
 import pandas as pd
 import numpy as np
 
+
+def taxi_decode(i):
+    dest_idx = i % 4
+    i = i // 4
+    # dest_idx = 3
+    pass_loc = 4
+    # pass_loc = 4*(i%2)
+    # i = i//2
+    col_idx = i % 5
+    i = i // 5
+    row_idx = i % 5
+    return [row_idx, col_idx, pass_loc, dest_idx]
+
+#ARI:  decode to make the passenger and destination location have the same units
+def taxi_decode_v2(i):
+    (taxi_row, taxi_col, pass_loc, dest_idx) = list(taxi_decode(i))
+    locs = [(0, 0), (0, 4), (4, 0), (4, 3)]
+    dest_row = locs[dest_idx][0]
+    dest_col = locs[dest_idx][1]
+    pass_in_taxi = 0
+    if pass_loc==4:
+        pass_row = taxi_row
+        pass_col = taxi_col
+        pass_in_taxi = 1
+    else:
+        pass_row = locs[pass_loc][0]
+        pass_col = locs[pass_loc][1]
+        pass_in_taxi = 0
+    return (taxi_row, taxi_col, dest_row, dest_col)  #  (taxi_row, taxi_col, pass_row, pass_col, dest_row, dest_col, pass_in_taxi)
+
+
+'''
 def taxi_decode(i):
     dest_idx = 3
     pass_loc = 4
@@ -35,7 +67,7 @@ def taxi_decode_v2(i):
         pass_col = locs[pass_loc][1]
         pass_in_taxi = 0
     return list(taxi_decode(i)) # (taxi_row, taxi_col, dest_row, dest_col)  #  (taxi_row, taxi_col, pass_row, pass_col, dest_row, dest_col, pass_in_taxi)
-
+'''
 
 
 '''
@@ -180,7 +212,7 @@ def run_policy(env, get_action, max_ep_len=None, num_episodes=100, render=True):
             env.render()
             time.sleep(1e-3)
 
-        o = list(taxi_decode_v2(o)) # ARI:  hack to make this work for taxi problem
+        o = list(env.decode(o)) # ARI:  hack to make this work for taxi problem
         a = get_action(o)
         taxi_action = int(a)
         o, r, d, _ = env.step(taxi_action) # env.step(a)
@@ -249,7 +281,7 @@ def pretty_print_policy(taxi, local_policy):
             print(taxi.MAP[row+1][2*col],end='')
             print(direction_repr[local_policy[state]],end='')
         print()
-
+    '''
 
 
     # Print policies for states where we already have passenger and are trying to get to destination, so pass_idx is always 4
@@ -258,7 +290,7 @@ def pretty_print_policy(taxi, local_policy):
     for row in range(5):
         for col in range(5):
             state = taxi.encode(row, col, 4, 0)
-            print(taxi.MAP[row+1][2*col],end='')
+            print(MAP[row+1][2*col],end='')
             print(direction_repr[local_policy[state]],end='')
         print()
 
@@ -266,7 +298,7 @@ def pretty_print_policy(taxi, local_policy):
     for row in range(5):
         for col in range(5):
             state = taxi.encode(row, col, 4, 1)
-            print(taxi.MAP[row+1][2*col],end='')
+            print(MAP[row+1][2*col],end='')
             print(direction_repr[local_policy[state]],end='')
         print()
 
@@ -274,10 +306,10 @@ def pretty_print_policy(taxi, local_policy):
     for row in range(5):
         for col in range(5):
             state = taxi.encode(row, col, 4, 2)
-            print(taxi.MAP[row+1][2*col],end='')
+            print(MAP[row+1][2*col],end='')
             print(direction_repr[local_policy[state]],end='')
         print()
-    '''
+
 
     print('Passenger in taxi, Dest = Blue (Bottom Right):')
     for row in range(5):
@@ -319,7 +351,7 @@ def export_policy_to_excel(fpath, itr, deterministic=False):
     for o in range(env.nS):
         state_index = o
         # Decode state and put into Excel DF
-        o = list(taxi_decode_v2(o))
+        o = list(env.decode(o))
         for ii in range(len(o)):
             excel_df[excel_df_keys_state[ii]].append(o[ii])
 
@@ -339,8 +371,8 @@ def export_policy_to_excel(fpath, itr, deterministic=False):
 
     df = pd.DataFrame(excel_df)
 
-    writer = pd.ExcelWriter('Simple_Taxi_Policy.xlsx', engine="xlsxwriter")
-    df.to_excel(writer, sheet_name='Simple_Taxi_Policy')
+    writer = pd.ExcelWriter('Simple_Taxi_Policy_500_epoch.xlsx', engine="xlsxwriter")
+    df.to_excel(writer, sheet_name='Simple_Taxi_Policy_500_epoch')
     writer.close()
 
     pretty_print_policy(env,my_policy)
@@ -348,7 +380,7 @@ def export_policy_to_excel(fpath, itr, deterministic=False):
 
 if __name__ == '__main__':
 
-    #'''
+
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('fpath', type=str)
@@ -361,9 +393,9 @@ if __name__ == '__main__':
     env, get_action = load_policy_and_env(args.fpath, args.itr if args.itr >=0 else 'last', args.deterministic)
     run_policy(env, get_action, args.len, args.episodes, not(args.norender))
     export_policy_to_excel(args.fpath, args.itr if args.itr >=0 else 'last', args.deterministic)
-    #'''
+
     '''
-    fpath = '/home/ari11/spinningup/ari_test/taxi_torch_basic_v1'
+    fpath = '/home/ari11/spinningup/ari_test/taxi_torch_8' # taxi_torch_basic_v1'
     env, get_action = load_policy_and_env(fpath, 'last')
     export_policy_to_excel(fpath, 'last')
     '''
